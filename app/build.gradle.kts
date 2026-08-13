@@ -31,15 +31,6 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
-    val debugKeystoreFile = file("${rootDir}/debug.keystore")
-    if (debugKeystoreFile.exists()) {
-      create("debugConfig") {
-        storeFile = debugKeystoreFile
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
-    }
   }
 
   buildTypes {
@@ -49,12 +40,9 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug {
-      val customDebug = signingConfigs.findByName("debugConfig")
-      if (customDebug != null) {
-        signingConfig = customDebug
-      }
-    }
+    // Keep the standard Android debug signing configuration. A locally supplied
+    // debug keystore can differ from the key used by CI or a previous install,
+    // which makes an update fail with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
