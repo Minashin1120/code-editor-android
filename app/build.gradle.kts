@@ -14,11 +14,14 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.htmleditor.pzxjqw"
+    // The previous ID is already installed on some devices with a different
+    // debug key. A new ID allows the repaired build to install without asking
+    // users to remove the old, incompatible package first.
+    applicationId = "com.aistudio.htmleditor.pzxjqw.v2"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
