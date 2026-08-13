@@ -124,6 +124,70 @@ git push
 
 履歴を壊す可能性があるため、通常運用では `--force` を使用しません。
 
+### 別の PC に変更した場合の Git セットアップ
+
+新しい Windows PC では、Git、SSH 認証、コミット署名を次の順で設定します。秘密鍵は安全な方法で移行し、紛失・漏えいした場合は GitHub から該当鍵を削除して新しい鍵を作成してください。
+
+1. Git をインストールします。
+
+```powershell
+winget install --id Git.Git -e --source winget
+```
+
+2. 既存の SSH 鍵を移行するか、新しい鍵を作成します。新規作成する場合は、Git Bash または PowerShell で実行します。
+
+```powershell
+ssh-keygen -t ed25519 -C "GitHubに登録済みのメールアドレス"
+```
+
+既定の保存先は `C:\Users\<ユーザー名>\.ssh\id_ed25519` です。秘密鍵（拡張子なし）は共有・公開せず、公開鍵だけを GitHub に登録します。
+
+3. SSH agent に鍵を登録します。環境によっては PowerShell を管理者として実行します。
+
+```powershell
+Get-Service ssh-agent | Set-Service -StartupType Automatic
+Start-Service ssh-agent
+ssh-add "$env:USERPROFILE\.ssh\id_ed25519"
+```
+
+4. GitHub の **Settings → SSH and GPG keys** に `id_ed25519.pub` の内容を登録します。同じ公開鍵を **Authentication** と **Signing** の2用途で登録します。
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub" | Set-Clipboard
+```
+
+5. SSH 接続を確認し、SSH URL でリポジトリを clone します。
+
+```powershell
+ssh -T git@github.com
+git clone git@github.com:Minashin1120/code-editor-android.git
+cd code-editor-android
+```
+
+既存の作業フォルダをコピーした場合は、remote を確認し、必要なら次で修正します。
+
+```powershell
+git remote set-url origin git@github.com:Minashin1120/code-editor-android.git
+```
+
+6. Git の作成者情報と SSH 署名を設定します。メールアドレスは GitHub で認証済みのものを使います。
+
+```powershell
+git config --global user.name "Minashin1120"
+git config --global user.email "GitHubで認証済みのメールアドレス"
+git config --global gpg.format ssh
+git config --global user.signingkey "$env:USERPROFILE/.ssh/id_ed25519.pub"
+git config --global commit.gpgsign true
+```
+
+7. 設定と署名を確認します。
+
+```powershell
+git config --show-origin --get-regexp "^(user\.|gpg\.|commit\.gpgsign|remote\.)"
+```
+
+次回の実際の変更をコミットした後、GitHub 上で `Verified` 表示を確認します。秘密鍵のパスフレーズや内容を AI、ログ、リポジトリへ渡してはいけません。
+
 ---
 
 ## 6. GitHub Actions による自動 APK ビルド仕組み
