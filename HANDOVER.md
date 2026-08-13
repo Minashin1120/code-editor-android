@@ -90,46 +90,46 @@ code-editor-android/
 
 ---
 
-## 5. PC からの Git 共有 & 運用手順 (初回のPush手順)
+## 5. GitHub 共有・コミット運用手順
 
-現在、PC（Windows環境）に `htmlエディター` ZIP がダウンロード済みですが、Git が未インストールのため以下のコマンドで順次準備を行えます。
+このリポジトリは初期化済みで、GitHub の remote は SSH に設定済みです。
 
-### Step 1. コマンドプロンプトで Git をインストール (Windows)
-```cmd
-winget install --id Git.Git -e --source winget
-```
+* **Repository**: `Minashin1120/code-editor-android`
+* **作業ブランチ**: `main`
+* **Remote**: `git@github.com:Minashin1120/code-editor-android.git`
+* **SSH 認証鍵**: `%USERPROFILE%\.ssh\id_ed25519`
+* **コミット署名**: SSH 署名をデフォルトで有効化済み
 
-### Step 2. 環境変数を適用し、リポジトリフォルダへ移動
-```cmd
-set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
-cd C:\Users\shintaro\Downloads\htmlエディター
-```
+通常の変更・コミット・push は以下で行います。
 
-### Step 3. 初回 Git コミット & GitHub へ Push
-```cmd
-# 1. Git 初期化
-git init
-
-# 2. リポジトリ URL 設定
-git remote add origin https://github.com/Minashin1120/code-editor-android.git
-
-# 3. メインブランチ設定
-git branch -M main
-
-# 4. 全ファイル追加 & コミット
+```powershell
+cd C:\Users\shintaro\Downloads\html-editor
+git status
 git add .
-git commit -m "Initial commit: HTML Editor code with Gradle 9.3.1 and GitHub Actions CI/CD"
-
-# 5. 強制 Push (リモートリポジトリへ一括書き込み)
-git push -u origin main --force
+git commit -m "変更内容"
+git push
 ```
+
+GitHub 側で公開鍵を **Authentication** と **Signing** の両方に登録しておく必要があります。コミット作成者のメールアドレスは、GitHub で認証済みのメールアドレスを使用してください。コミットページで `Verified` と表示されることを確認します。
+
+リモートに先行コミットがある場合は、まず取得して rebase します。競合を解消してから push してください。
+
+```powershell
+git fetch origin
+git rebase origin/main
+git add <競合を解消したファイル>
+git rebase --continue
+git push
+```
+
+履歴を壊す可能性があるため、通常運用では `--force` を使用しません。
 
 ---
 
 ## 6. GitHub Actions による自動 APK ビルド仕組み
 
-1. 上記の `git push` が成功すると、GitHub 上の `.github/workflows/android.yml` が自動発火します。
-2. GitHub Actions 上で JDK 17 環境が構築され、`./gradlew assembleDebug` が実行されます。
+1. `main` への `git push` が成功すると、GitHub 上の `.github/workflows/android.yml` が自動発火します。
+2. GitHub Actions 上で JDK 17 と Gradle 8.10.2 が設定され、`gradle assembleDebug --stacktrace` が実行されます。
 3. ビルド成功後、GitHub リポジトリの **「Actions」** タブ ➔ 該当ワークフロー実行結果の一番下にある **Artifacts** に **`html-editor-app-debug-apk`** が生成され、スマホにインストール可能な `.apk` ファイルがダウンロードできます。
 
 ---
