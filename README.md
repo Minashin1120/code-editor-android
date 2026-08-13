@@ -18,5 +18,5 @@ View your app in AI Studio: https://ai.studio/apps/6ae938b3-adb9-44e0-800b-18125
 3. Allow Android Studio to fix any incompatibilities as it imports the project.
 4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
 5. Run the app on an emulator or physical device. Debug builds use Gradle's standard debug signing configuration so builds from this repository do not accidentally switch keys based on a local `debug.keystore` file.
-6. The repaired build uses the package ID `com.aistudio.htmleditor.pzxjqw.v2` so it can be installed alongside an older build signed with an incompatible key. The old package can be removed after confirming the new build works.
+6. For GitHub Actions, download the artifact named `html-editor-app-debug-apk-v2`. The repaired build uses the package ID `com.aistudio.htmleditor.pzxjqw.v2` and version `1.1`, so it can be installed alongside an older build signed with an incompatible key.
 7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
