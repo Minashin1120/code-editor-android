@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.HtmlDocument
 import com.example.data.HtmlDocumentRepository
 import com.example.util.HtmlFormatter
-import com.example.util.HtmlTemplates
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,8 +25,8 @@ enum class EditorTab {
 
 data class EditorUiState(
     val currentDocumentId: Long? = null,
-    val documentTitle: String = "index.html",
-    val content: String = HtmlTemplates.defaultHtml,
+    val documentTitle: String = "untitled.html",
+    val content: String = "",
     val activeTab: EditorTab = EditorTab.CODE,
     val isSearchVisible: Boolean = false,
     val searchQuery: String = "",
@@ -39,7 +38,6 @@ data class EditorUiState(
     val isDesktopViewport: Boolean = false,
     val toastMessage: String? = null,
     val isRecentSheetVisible: Boolean = false,
-    val isTemplatesDialogVisible: Boolean = false,
     val isSaveAsDialogVisible: Boolean = false,
     val currentFileUri: String? = null,
     val isModified: Boolean = false
@@ -61,24 +59,7 @@ class EditorViewModel(
 
     private val undoStack = java.util.ArrayDeque<String>()
     private val redoStack = java.util.ArrayDeque<String>()
-    private var lastSavedContent: String = HtmlTemplates.defaultHtml
-
-    init {
-        // Create initial draft in DB if none exists
-        viewModelScope.launch {
-            repository.allDocuments.collect { docs ->
-                if (docs.isEmpty() && _uiState.value.currentDocumentId == null) {
-                    val initialDoc = HtmlDocument(
-                        title = "index.html",
-                        content = HtmlTemplates.defaultHtml
-                    )
-                    val id = repository.saveDocument(initialDoc)
-                    _uiState.update { it.copy(currentDocumentId = id) }
-                    lastSavedContent = HtmlTemplates.defaultHtml
-                }
-            }
-        }
-    }
+    private var lastSavedContent: String = ""
 
     fun onContentChange(newContent: String) {
         val current = _uiState.value.content
@@ -249,27 +230,26 @@ class EditorViewModel(
         }
     }
 
-    fun createNewDocument(title: String = "untitled.html", code: String = HtmlTemplates.defaultHtml) {
+    fun createNewDocument(title: String = "untitled.html") {
         undoStack.clear()
         redoStack.clear()
-        lastSavedContent = code
+        lastSavedContent = ""
         viewModelScope.launch {
             val newDoc = HtmlDocument(
                 title = title,
-                content = code
+                content = ""
             )
             val id = repository.saveDocument(newDoc)
             _uiState.update {
                 it.copy(
                     currentDocumentId = id,
                     documentTitle = title,
-                    content = code,
+                    content = "",
                     currentFileUri = null,
                     canUndo = false,
                     canRedo = false,
                     isModified = false,
                     isRecentSheetVisible = false,
-                    isTemplatesDialogVisible = false
                 )
             }
             showToast("新規ファイル作成: $title")
@@ -404,10 +384,6 @@ class EditorViewModel(
 
     fun setRecentSheetVisible(visible: Boolean) {
         _uiState.update { it.copy(isRecentSheetVisible = visible) }
-    }
-
-    fun setTemplatesDialogVisible(visible: Boolean) {
-        _uiState.update { it.copy(isTemplatesDialogVisible = visible) }
     }
 
     fun setSaveAsDialogVisible(visible: Boolean) {

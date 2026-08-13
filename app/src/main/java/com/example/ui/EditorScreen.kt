@@ -67,7 +67,6 @@ import com.example.ui.components.QuickTagToolbar
 import com.example.ui.components.RecentFilesSheet
 import com.example.ui.components.SaveAsDialog
 import com.example.ui.components.SearchReplaceBar
-import com.example.ui.components.TemplatesDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,14 +206,6 @@ fun EditorScreen(
                                     onClick = {
                                         isMenuExpanded = false
                                         createDocumentLauncher.launch(uiState.documentTitle)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("テンプレートから作成") },
-                                    leadingIcon = { Icon(Icons.Default.Code, contentDescription = null) },
-                                    onClick = {
-                                        isMenuExpanded = false
-                                        viewModel.setTemplatesDialogVisible(true)
                                     }
                                 )
                                 DropdownMenuItem(
@@ -363,18 +354,6 @@ fun EditorScreen(
             },
             onDeleteDocument = { viewModel.deleteDocument(it) },
             onDismiss = { viewModel.setRecentSheetVisible(false) }
-        )
-    }
-
-    if (uiState.isTemplatesDialogVisible) {
-        TemplatesDialog(
-            onSelectTemplate = { template ->
-                viewModel.createNewDocument(
-                    title = "${template.name.replace(" ", "_")}.html",
-                    code = template.code
-                )
-            },
-            onDismiss = { viewModel.setTemplatesDialogVisible(false) }
         )
     }
 
