@@ -1,3 +1,6 @@
+# GitHub Actions Workflow for Building Android APK
+# Place this file at .github/workflows/android.yml in your repository
+
 name: Build Android APK
 
 on:
@@ -20,7 +23,6 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
