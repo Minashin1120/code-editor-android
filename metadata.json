@@ -1,0 +1,6 @@
+{
+  "name": "HTMLエディター",
+  "description": "HTMLコードの編集・新規作成・リアルタイムプレビュー・共有シート連携対応のコードエディターアプリ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
