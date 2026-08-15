@@ -34,6 +34,13 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
+    create("debugConfig") {
+      storeFile = file("${rootDir}/debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
+      storeType = "pkcs12"
+    }
   }
 
   buildTypes {
@@ -43,9 +50,9 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    // Keep the standard Android debug signing configuration. A locally supplied
-    // debug keystore can differ from the key used by CI or a previous install,
-    // which makes an update fail with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+    debug {
+      signingConfig = signingConfigs.getByName("debugConfig")
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

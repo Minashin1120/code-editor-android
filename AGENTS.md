@@ -47,7 +47,7 @@ push 前に、変更対象とコミット内容を確認します。remote は S
 ## 秘密情報と実装上の注意
 
 - API キー、keystore、パスワード、`.env` などの秘密情報をコミットしません。
-- `app/build.gradle.kts` の debug signing は、カスタム keystore がない場合に標準設定へフォールバックさせます。
+- `app/build.gradle.kts` の debug signing は、リポジトリ直下の `debug.keystore` を使います。CI とローカルで署名を揃えるため、このファイルはコミットします。upload 用の `*.jks` はコミットしません。
 - Android の UI やデータ保存仕様を変更する場合は、関連する ViewModel、Repository、Room DAO、Manifest も確認します。
 
 ## 完了前チェック
