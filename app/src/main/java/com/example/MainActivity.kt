@@ -7,16 +7,25 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.data.AppDatabase
 import com.example.data.HtmlDocumentRepository
 import com.example.ui.EditorScreen
 import com.example.ui.EditorViewModel
 import com.example.ui.EditorViewModelFactory
+import com.example.ui.LaunchSplashScreen
 import com.example.ui.theme.MyApplicationTheme
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
 
@@ -25,18 +34,39 @@ class MainActivity : ComponentActivity() {
     private val viewModel: EditorViewModel by viewModels { EditorViewModelFactory(repository) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val keepSystemSplash = AtomicBoolean(true)
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { keepSystemSplash.get() }
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         handleIncomingIntent(intent)
 
+        val playLaunchAnimation = savedInstanceState == null
+
         setContent {
+            var showLaunchAnimation by remember { mutableStateOf(playLaunchAnimation) }
+
+            SideEffect {
+                keepSystemSplash.set(false)
+            }
+
             MyApplicationTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    EditorScreen(viewModel = viewModel)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        EditorScreen(viewModel = viewModel)
+                    }
+
+                    if (showLaunchAnimation) {
+                        LaunchSplashScreen(
+                            onFinished = { showLaunchAnimation = false },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
         }
