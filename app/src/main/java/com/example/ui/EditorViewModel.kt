@@ -1,7 +1,9 @@
 package com.example.ui
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -38,7 +40,6 @@ data class EditorUiState(
     val isDesktopViewport: Boolean = false,
     val toastMessage: String? = null,
     val isRecentSheetVisible: Boolean = false,
-    val isSaveAsDialogVisible: Boolean = false,
     val currentFileUri: String? = null,
     val isModified: Boolean = false
 )
@@ -188,27 +189,100 @@ class EditorViewModel(
         onContentChange(updated)
     }
 
-    fun saveDocument(titleOverride: String? = null) {
+    fun overwriteToDeviceFile(context: Context): Boolean {
+        val uriString = _uiState.value.currentFileUri
+        if (uriString.isNullOrBlank()) return false
+        val uri = Uri.parse(uriString)
+        if (!isDeviceFileAccessible(context, uri)) return false
+        return writeContentToUri(context, uri, isOverwrite = true)
+    }
+
+    fun saveAsToFileUri(context: Context, uri: Uri) {
+        takePersistableWritePermission(context, uri)
+        writeContentToUri(context, uri, isOverwrite = false)
+    }
+
+    private fun writeContentToUri(context: Context, uri: Uri, isOverwrite: Boolean): Boolean {
+        return try {
+            val outputStream = try {
+                context.contentResolver.openOutputStream(uri, "wt")
+            } catch (_: IllegalArgumentException) {
+                context.contentResolver.openOutputStream(uri, "w")
+            } ?: return false
+
+            outputStream.use { stream ->
+                OutputStreamWriter(stream).use { writer ->
+                    writer.write(_uiState.value.content)
+                }
+            }
+            val fileName = getFileNameFromUri(context, uri) ?: _uiState.value.documentTitle
+            lastSavedContent = _uiState.value.content
+            persistDocumentToRepository(fileName, uri.toString())
+            showToast(
+                if (isOverwrite) {
+                    "「$fileName」を上書き保存しました"
+                } else {
+                    "「$fileName」を保存しました"
+                }
+            )
+            true
+        } catch (e: Exception) {
+            showToast("ファイルの保存に失敗しました: ${e.localizedMessage}")
+            false
+        }
+    }
+
+    private fun persistDocumentToRepository(title: String, fileUri: String?) {
         viewModelScope.launch {
-            val titleToUse = titleOverride ?: _uiState.value.documentTitle
             val doc = HtmlDocument(
                 id = _uiState.value.currentDocumentId ?: 0L,
-                title = titleToUse,
+                title = title,
                 content = _uiState.value.content,
                 updatedAt = System.currentTimeMillis(),
-                fileUri = _uiState.value.currentFileUri
+                fileUri = fileUri
             )
             val id = repository.saveDocument(doc)
-            lastSavedContent = _uiState.value.content
             _uiState.update {
                 it.copy(
                     currentDocumentId = id,
-                    documentTitle = titleToUse,
-                    isModified = false,
-                    isSaveAsDialogVisible = false
+                    documentTitle = title,
+                    currentFileUri = fileUri,
+                    isModified = false
                 )
             }
-            showToast("「$titleToUse」を保存しました")
+        }
+    }
+
+    fun isDeviceFileAccessible(context: Context, uri: Uri): Boolean {
+        return try {
+            val persisted = context.contentResolver.persistedUriPermissions.any { it.uri == uri }
+            if (persisted) return true
+            if (context.contentResolver.getType(uri) != null) return true
+            context.contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { it.moveToFirst() } == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun takePersistableWritePermission(context: Context, uri: Uri) {
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        try {
+            context.contentResolver.takePersistableUriPermission(uri, flags)
+        } catch (_: SecurityException) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // Temporary grant only; overwrite may fall back to Save As later.
+            }
         }
     }
 
@@ -296,6 +370,7 @@ class EditorViewModel(
 
     fun loadContentFromUri(context: Context, uri: Uri) {
         try {
+            takePersistableWritePermission(context, uri)
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 BufferedReader(InputStreamReader(inputStream)).use { reader ->
                     val sb = StringBuilder()
@@ -337,29 +412,6 @@ class EditorViewModel(
         }
     }
 
-    fun exportToFileUri(context: Context, uri: Uri) {
-        try {
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                OutputStreamWriter(outputStream).use { writer ->
-                    writer.write(_uiState.value.content)
-                }
-            }
-            val fileName = getFileNameFromUri(context, uri) ?: _uiState.value.documentTitle
-            _uiState.update {
-                it.copy(
-                    documentTitle = fileName,
-                    currentFileUri = uri.toString(),
-                    isModified = false
-                )
-            }
-            lastSavedContent = _uiState.value.content
-            saveDocument(fileName)
-            showToast("端末に「$fileName」を保存しました")
-        } catch (e: Exception) {
-            showToast("ファイルの保存に失敗しました: ${e.localizedMessage}")
-        }
-    }
-
     private fun getFileNameFromUri(context: Context, uri: Uri): String? {
         var name: String? = null
         val cursor = context.contentResolver.query(uri, null, null, null, null)
@@ -384,10 +436,6 @@ class EditorViewModel(
 
     fun setRecentSheetVisible(visible: Boolean) {
         _uiState.update { it.copy(isRecentSheetVisible = visible) }
-    }
-
-    fun setSaveAsDialogVisible(visible: Boolean) {
-        _uiState.update { it.copy(isSaveAsDialogVisible = visible) }
     }
 }
 

@@ -8,29 +8,27 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.SaveAs
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -42,6 +40,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -59,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,11 +68,22 @@ import com.example.ui.components.CodeEditorView
 import com.example.ui.components.HtmlPreviewView
 import com.example.ui.components.QuickTagToolbar
 import com.example.ui.components.RecentFilesSheet
-import com.example.ui.components.SaveAsDialog
 import com.example.ui.components.SearchReplaceBar
 import com.example.ui.components.UpdateAvailableDialog
 
-@OptIn(ExperimentalMaterial3Api::class)
+private class OpenWritableDocument : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: android.content.Context, input: Array<String>): Intent {
+        return super.createIntent(context, input).apply {
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EditorScreen(
     viewModel: EditorViewModel,
@@ -84,10 +95,11 @@ fun EditorScreen(
     val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var isMenuExpanded by remember { mutableStateOf(false) }
+    var isSaveModeMenuExpanded by remember { mutableStateOf(false) }
 
     // SAF Activity Launchers
     val openDocumentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = OpenWritableDocument()
     ) { uri ->
         uri?.let { viewModel.loadContentFromUri(context, it) }
     }
@@ -95,7 +107,17 @@ fun EditorScreen(
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/html")
     ) { uri ->
-        uri?.let { viewModel.exportToFileUri(context, it) }
+        uri?.let { viewModel.saveAsToFileUri(context, it) }
+    }
+
+    fun launchSaveAs() {
+        createDocumentLauncher.launch(uiState.documentTitle)
+    }
+
+    fun requestOverwriteSave() {
+        if (!viewModel.overwriteToDeviceFile(context)) {
+            launchSaveAs()
+        }
     }
 
     // Handle Toast
@@ -155,12 +177,48 @@ fun EditorScreen(
                             Icon(Icons.Default.Search, contentDescription = "検索・置換")
                         }
 
-                        IconButton(onClick = { viewModel.saveDocument() }) {
-                            Icon(
-                                Icons.Default.Save,
-                                contentDescription = "保存",
-                                tint = if (uiState.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
+                        Box {
+                            val saveInteractionSource = remember { MutableInteractionSource() }
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .combinedClickable(
+                                        interactionSource = saveInteractionSource,
+                                        indication = ripple(bounded = false, radius = 24.dp),
+                                        role = Role.Button,
+                                        onClick = { requestOverwriteSave() },
+                                        onLongClick = { isSaveModeMenuExpanded = true },
+                                        onLongClickLabel = "保存方法を選択"
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Save,
+                                    contentDescription = "上書き保存",
+                                    tint = if (uiState.isModified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = isSaveModeMenuExpanded,
+                                onDismissRequest = { isSaveModeMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("上書き保存") },
+                                    leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) },
+                                    onClick = {
+                                        isSaveModeMenuExpanded = false
+                                        requestOverwriteSave()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("名前を付けて保存") },
+                                    leadingIcon = { Icon(Icons.Default.SaveAs, contentDescription = null) },
+                                    onClick = {
+                                        isSaveModeMenuExpanded = false
+                                        launchSaveAs()
+                                    }
+                                )
+                            }
                         }
 
                         // Share Code Action
@@ -198,14 +256,6 @@ fun EditorScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("名前を付けて保存") },
-                                    leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) },
-                                    onClick = {
-                                        isMenuExpanded = false
-                                        viewModel.setSaveAsDialogVisible(true)
-                                    }
-                                )
-                                DropdownMenuItem(
                                     text = { Text("端末のHTMLファイルを開く") },
                                     leadingIcon = { Icon(Icons.Default.FolderOpen, contentDescription = null) },
                                     onClick = {
@@ -214,11 +264,11 @@ fun EditorScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("端末ストレージにエクスポート") },
-                                    leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                    text = { Text("名前を付けて保存") },
+                                    leadingIcon = { Icon(Icons.Default.SaveAs, contentDescription = null) },
                                     onClick = {
                                         isMenuExpanded = false
-                                        createDocumentLauncher.launch(uiState.documentTitle)
+                                        launchSaveAs()
                                     }
                                 )
                                 DropdownMenuItem(
@@ -387,16 +437,6 @@ fun EditorScreen(
             },
             onDeleteDocument = { viewModel.deleteDocument(it) },
             onDismiss = { viewModel.setRecentSheetVisible(false) }
-        )
-    }
-
-    if (uiState.isSaveAsDialogVisible) {
-        SaveAsDialog(
-            initialTitle = uiState.documentTitle,
-            onSave = { newTitle ->
-                viewModel.saveDocument(newTitle)
-            },
-            onDismiss = { viewModel.setSaveAsDialogVisible(false) }
         )
     }
 
