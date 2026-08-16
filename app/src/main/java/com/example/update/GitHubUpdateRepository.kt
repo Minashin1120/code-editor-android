@@ -3,6 +3,7 @@ package com.example.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -19,9 +20,21 @@ class OkHttpUpdateClient(
     override suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
-            .header("Accept", "application/vnd.github+json")
             .header("User-Agent", USER_AGENT)
-            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Cache-Control", "no-cache")
+            .apply {
+                if (url.contains("api.github.com")) {
+                    val accept = if (url.contains("/contents/")) {
+                        "application/vnd.github.raw"
+                    } else {
+                        "application/vnd.github+json"
+                    }
+                    header("Accept", accept)
+                    header("X-GitHub-Api-Version", "2022-11-28")
+                } else {
+                    header("Accept", "application/json")
+                }
+            }
             .build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
@@ -35,6 +48,7 @@ class OkHttpUpdateClient(
 
         fun defaultClient(): OkHttpClient {
             return OkHttpClient.Builder()
+                .protocols(listOf(Protocol.HTTP_1_1))
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .build()
@@ -48,10 +62,28 @@ class GitHubUpdateRepository(
     private val httpClient: UpdateHttpClient,
 ) {
     suspend fun check(): UpdateCheckResult {
-        return try {
-            val remote = fetchLatestRelease() ?: fetchVersionManifest()
-                ?: return UpdateCheckResult.Error("公開中のバージョン情報を取得できませんでした")
-            if (AppVersion.isRemoteNewer(
+        val remotes = mutableListOf<RemoteUpdate>()
+        var lastStatus: HttpStatusException? = null
+        var sawNetworkError = false
+        var sawOtherError = false
+        var otherMessage: String? = null
+
+        for ((url, parser) in sources) {
+            try {
+                remotes += parser(httpClient.get(url))
+            } catch (e: HttpStatusException) {
+                lastStatus = e
+            } catch (_: IOException) {
+                sawNetworkError = true
+            } catch (e: Exception) {
+                sawOtherError = true
+                otherMessage = e.localizedMessage
+            }
+        }
+
+        val remote = newest(remotes)
+        if (remote != null) {
+            return if (AppVersion.isRemoteNewer(
                     remoteName = remote.versionName,
                     remoteCode = remote.versionCode,
                     localName = currentVersionName,
@@ -62,32 +94,23 @@ class GitHubUpdateRepository(
             } else {
                 UpdateCheckResult.UpToDate
             }
-        } catch (e: HttpStatusException) {
-            UpdateCheckResult.Error("サーバーに接続できませんでした (${e.code})")
-        } catch (e: IOException) {
-            UpdateCheckResult.Error("ネットワークに接続できませんでした")
-        } catch (e: Exception) {
-            UpdateCheckResult.Error(e.localizedMessage ?: "更新確認に失敗しました")
+        }
+
+        return when {
+            lastStatus != null -> UpdateCheckResult.Error("サーバーに接続できませんでした (${lastStatus.code})")
+            sawNetworkError -> UpdateCheckResult.Error("ネットワークに接続できませんでした")
+            sawOtherError -> UpdateCheckResult.Error(otherMessage ?: "更新確認に失敗しました")
+            else -> UpdateCheckResult.Error("公開中のバージョン情報を取得できませんでした")
         }
     }
 
-    private suspend fun fetchLatestRelease(): RemoteUpdate? {
-        return try {
-            val json = httpClient.get(latestReleaseUrl)
-            UpdateJson.parseGithubRelease(json)
-        } catch (e: HttpStatusException) {
-            if (e.code == 404) null else throw e
-        }
-    }
-
-    private suspend fun fetchVersionManifest(): RemoteUpdate? {
-        return try {
-            val json = httpClient.get(versionManifestUrl)
-            UpdateJson.parseVersionManifest(json)
-        } catch (e: HttpStatusException) {
-            if (e.code == 404) null else throw e
-        }
-    }
+    private val sources: List<Pair<String, (String) -> List<RemoteUpdate>>>
+        get() = listOf(
+            versionManifestUrl to { body -> listOfNotNull(UpdateJson.parseVersionManifest(body)) },
+            versionManifestApiUrl to { body -> listOfNotNull(UpdateJson.parseVersionManifest(body)) },
+            latestReleaseUrl to { body -> listOfNotNull(UpdateJson.parseGithubRelease(body)) },
+            releasesUrl to { body -> UpdateJson.parseGithubReleases(body) },
+        )
 
     companion object {
         const val OWNER = "Minashin1120"
@@ -96,7 +119,24 @@ class GitHubUpdateRepository(
         val latestReleaseUrl: String
             get() = "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
 
+        val releasesUrl: String
+            get() = "https://api.github.com/repos/$OWNER/$REPO/releases?per_page=10"
+
         val versionManifestUrl: String
             get() = "https://raw.githubusercontent.com/$OWNER/$REPO/main/version.json"
+
+        val versionManifestApiUrl: String
+            get() = "https://api.github.com/repos/$OWNER/$REPO/contents/version.json?ref=main"
+
+        internal fun newest(updates: List<RemoteUpdate>): RemoteUpdate? {
+            return updates.maxWithOrNull { left, right -> compareUpdates(left, right) }
+        }
+
+        private fun compareUpdates(left: RemoteUpdate, right: RemoteUpdate): Int {
+            val leftCode = left.versionCode?.takeIf { it > 0 }
+            val rightCode = right.versionCode?.takeIf { it > 0 }
+            if (leftCode != null && rightCode != null) return leftCode.compareTo(rightCode)
+            return AppVersion.compareNames(left.versionName, right.versionName)
+        }
     }
 }

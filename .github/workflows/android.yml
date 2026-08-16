@@ -7,6 +7,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -43,3 +46,20 @@ jobs:
       with:
         name: html-editor-app-debug-apk-v2
         path: app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Read app version
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      run: |
+        version_name="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+        test -n "$version_name"
+        echo "VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+
+    - name: Publish GitHub Release
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ env.VERSION_NAME }}
+        name: ${{ env.VERSION_NAME }}
+        generate_release_notes: true
+        make_latest: true
+        files: app/build/outputs/apk/debug/app-debug.apk

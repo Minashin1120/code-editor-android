@@ -49,4 +49,17 @@ class UpdateJsonTest {
     fun parseGithubRelease_returnsNullWhenTagMissing() {
         assertNull(UpdateJson.parseGithubRelease("""{"html_url":"https://example.com"}"""))
     }
+
+    @Test
+    fun parseGithubReleases_readsFirstPublishedTag() {
+        val json = """
+            [
+              {"tag_name":"v1.4","html_url":"https://example.com/v1.4"},
+              {"tag_name":"v1.3","html_url":"https://example.com/v1.3"}
+            ]
+        """.trimIndent()
+
+        val updates = UpdateJson.parseGithubReleases(json)
+        assertEquals(listOf("1.4", "1.3"), updates.map { it.versionName })
+    }
 }

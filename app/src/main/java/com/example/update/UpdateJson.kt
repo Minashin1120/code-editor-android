@@ -18,6 +18,14 @@ internal object UpdateJson {
         )
     }
 
+    fun parseGithubReleases(json: String): List<RemoteUpdate> {
+        val trimmed = json.trim()
+        if (trimmed.startsWith("[")) {
+            return jsonObjects(trimmed).mapNotNull(::parseGithubRelease)
+        }
+        return listOfNotNull(parseGithubRelease(trimmed))
+    }
+
     fun parseVersionManifest(json: String): RemoteUpdate? {
         val versionName = stringField(json, "versionName")?.let(AppVersion::normalize)
         if (versionName.isNullOrEmpty()) return null
@@ -63,5 +71,43 @@ internal object UpdateJson {
             .replace("\\t", "\t")
             .replace("\\\"", "\"")
             .replace("\\\\", "\\")
+    }
+
+    private fun jsonObjects(arrayJson: String): List<String> {
+        val objects = mutableListOf<String>()
+        var depth = 0
+        var start = -1
+        var inString = false
+        var escaped = false
+        for (index in arrayJson.indices) {
+            val char = arrayJson[index]
+            if (inString) {
+                escaped = if (escaped) {
+                    false
+                } else if (char == '\\') {
+                    true
+                } else {
+                    if (char == '"') inString = false
+                    false
+                }
+                continue
+            }
+            when (char) {
+                '"' -> inString = true
+                '{' -> {
+                    if (depth == 0) start = index
+                    depth++
+                }
+                '}' -> {
+                    if (depth == 0) continue
+                    depth--
+                    if (depth == 0 && start >= 0) {
+                        objects += arrayJson.substring(start, index + 1)
+                        start = -1
+                    }
+                }
+            }
+        }
+        return objects
     }
 }
