@@ -91,6 +91,18 @@ class GitHubUpdateRepositoryTest {
     }
 
     @Test
+    fun publicUrls_pointToThisRepository() {
+        assertEquals(
+            "https://github.com/Minashin1120/code-editor-android",
+            GitHubUpdateRepository.repositoryWebUrl,
+        )
+        assertEquals(
+            "https://github.com/Minashin1120/code-editor-android?tab=license",
+            GitHubUpdateRepository.licenseWebUrl,
+        )
+    }
+
+    @Test
     fun check_returnsErrorOnNetworkFailure() = runTest {
         val repository = GitHubUpdateRepository(
             currentVersionName = "1.1",

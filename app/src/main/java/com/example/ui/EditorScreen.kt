@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAs
@@ -70,6 +73,7 @@ import com.example.ui.components.QuickTagToolbar
 import com.example.ui.components.RecentFilesSheet
 import com.example.ui.components.SearchReplaceBar
 import com.example.ui.components.UpdateAvailableDialog
+import com.example.update.GitHubUpdateRepository
 
 private class OpenWritableDocument : ActivityResultContracts.OpenDocument() {
     override fun createIntent(context: android.content.Context, input: Array<String>): Intent {
@@ -117,6 +121,14 @@ fun EditorScreen(
     fun requestOverwriteSave() {
         if (!viewModel.overwriteToDeviceFile(context)) {
             launchSaveAs()
+        }
+    }
+
+    fun openWebPage(url: String) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "ブラウザを開けませんでした", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -285,6 +297,22 @@ fun EditorScreen(
                                     onClick = {
                                         isMenuExpanded = false
                                         updateViewModel.checkForUpdates(manual = true)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("GitHubリポジトリ") },
+                                    leadingIcon = { Icon(Icons.Default.OpenInNew, contentDescription = null) },
+                                    onClick = {
+                                        isMenuExpanded = false
+                                        openWebPage(GitHubUpdateRepository.repositoryWebUrl)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("ライセンスを確認") },
+                                    leadingIcon = { Icon(Icons.Default.Policy, contentDescription = null) },
+                                    onClick = {
+                                        isMenuExpanded = false
+                                        openWebPage(GitHubUpdateRepository.licenseWebUrl)
                                     }
                                 )
                                 DropdownMenuItem(

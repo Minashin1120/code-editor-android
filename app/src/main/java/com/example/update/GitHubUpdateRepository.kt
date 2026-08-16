@@ -116,6 +116,12 @@ class GitHubUpdateRepository(
         const val OWNER = "Minashin1120"
         const val REPO = "code-editor-android"
 
+        val repositoryWebUrl: String
+            get() = "https://github.com/$OWNER/$REPO"
+
+        val licenseWebUrl: String
+            get() = "https://github.com/$OWNER/$REPO?tab=license"
+
         val latestReleaseUrl: String
             get() = "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
 
