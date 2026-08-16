@@ -28,6 +28,24 @@ gradle test
 
 workflow や Gradle 設定を変更した場合は、変更理由と検証結果をコミットメッセージまたは引き継ぎ資料に残します。
 
+## 更新確認とリリース
+
+アプリ内の「更新を確認」は、GitHub 上の公開情報だけを見る。配布の正本は GitHub Release であり、Actions の成果物だけでは更新として検出されない。
+
+確認先:
+
+- `version.json`（`main` の raw と Contents API）
+- GitHub Releases（`/releases/latest` とリリース一覧）
+
+比較は `app/build.gradle.kts` の `versionCode` を優先し、無ければ `versionName` を使う。インストール済みと同じ版なら「最新」と表示するのが正しい。
+
+公開手順:
+
+- `main` / `master` への push で `.github/workflows/android.yml` が debug APK をビルドし、タグ `v{versionName}` の GitHub Release を作成または更新する。同じ `versionName` のまま push すると、そのタグと Release 上の APK を上書きする。
+- ユーザーに新しい更新として通知するには、`versionName` と `versionCode` を上げ、同じ値を `version.json` にも書く。片方だけ変えない。
+- エージェントは依頼なしに `git tag` や `git push --tags` をしない。リリースタグは CI が作る。
+- `v*` タグの push と workflow の手動実行は `.github/workflows/release.yml` が扱う。通常の公開は android.yml 側に任せる。
+
 ## Git
 
 依頼された変更の実装と検証が完了したら、現在のブランチでローカルコミットまで行います。
