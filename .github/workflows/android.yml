@@ -12,6 +12,19 @@ permissions:
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event_name == 'pull_request'
+      || (
+        github.event_name == 'push'
+        && (
+          github.event.head_commit == null
+          || (
+            !contains(github.event.head_commit.message, '[skip build]')
+            && !contains(github.event.head_commit.message, '[skip ci]')
+          )
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
