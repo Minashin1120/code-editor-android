@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.data.AppDatabase
 import com.example.data.HtmlDocumentRepository
+import com.example.ui.AppUpdateViewModel
 import com.example.ui.EditorScreen
 import com.example.ui.EditorViewModel
 import com.example.ui.EditorViewModelFactory
@@ -32,6 +34,7 @@ class MainActivity : ComponentActivity() {
     private val db by lazy { AppDatabase.getDatabase(this) }
     private val repository by lazy { HtmlDocumentRepository(db.htmlDocumentDao()) }
     private val viewModel: EditorViewModel by viewModels { EditorViewModelFactory(repository) }
+    private val updateViewModel: AppUpdateViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val keepSystemSplash = AtomicBoolean(true)
@@ -47,9 +50,17 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             var showLaunchAnimation by remember { mutableStateOf(playLaunchAnimation) }
+            var pendingAutoUpdateCheck by remember { mutableStateOf(!playLaunchAnimation) }
 
             SideEffect {
                 keepSystemSplash.set(false)
+            }
+
+            LaunchedEffect(pendingAutoUpdateCheck) {
+                if (pendingAutoUpdateCheck) {
+                    pendingAutoUpdateCheck = false
+                    updateViewModel.checkForUpdates(manual = false)
+                }
             }
 
             MyApplicationTheme {
@@ -58,12 +69,18 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        EditorScreen(viewModel = viewModel)
+                        EditorScreen(
+                            viewModel = viewModel,
+                            updateViewModel = updateViewModel,
+                        )
                     }
 
                     if (showLaunchAnimation) {
                         LaunchSplashScreen(
-                            onFinished = { showLaunchAnimation = false },
+                            onFinished = {
+                                showLaunchAnimation = false
+                                pendingAutoUpdateCheck = true
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

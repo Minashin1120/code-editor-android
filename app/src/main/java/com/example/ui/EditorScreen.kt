@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,8 +31,10 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.ViewStream
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,15 +70,18 @@ import com.example.ui.components.QuickTagToolbar
 import com.example.ui.components.RecentFilesSheet
 import com.example.ui.components.SaveAsDialog
 import com.example.ui.components.SearchReplaceBar
+import com.example.ui.components.UpdateAvailableDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
     viewModel: EditorViewModel,
+    updateViewModel: AppUpdateViewModel,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val recentDocs by viewModel.recentDocuments.collectAsStateWithLifecycle()
+    val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var isMenuExpanded by remember { mutableStateOf(false) }
 
@@ -97,6 +103,13 @@ fun EditorScreen(
         uiState.toastMessage?.let { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             viewModel.clearToast()
+        }
+    }
+
+    LaunchedEffect(updateState.statusMessage) {
+        updateState.statusMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            updateViewModel.clearStatusMessage()
         }
     }
 
@@ -214,6 +227,26 @@ fun EditorScreen(
                                     onClick = {
                                         isMenuExpanded = false
                                         viewModel.formatHtmlCode()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("更新を確認") },
+                                    leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
+                                    onClick = {
+                                        isMenuExpanded = false
+                                        updateViewModel.checkForUpdates(manual = true)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("バージョン ${updateState.currentVersionName}") },
+                                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                                    onClick = {
+                                        isMenuExpanded = false
+                                        Toast.makeText(
+                                            context,
+                                            "使用中のバージョン: ${updateState.currentVersionName}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 )
                             }
@@ -364,6 +397,21 @@ fun EditorScreen(
                 viewModel.saveDocument(newTitle)
             },
             onDismiss = { viewModel.setSaveAsDialogVisible(false) }
+        )
+    }
+
+    val availableUpdate = updateState.availableUpdate
+    if (updateState.showDialog && availableUpdate != null) {
+        UpdateAvailableDialog(
+            currentVersionName = updateState.currentVersionName,
+            update = availableUpdate,
+            onOpenUpdate = {
+                val target = availableUpdate.downloadUrl ?: availableUpdate.pageUrl
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                updateViewModel.dismissDialog()
+            },
+            onSkip = { updateViewModel.skipAvailableVersion() },
+            onDismiss = { updateViewModel.dismissDialog() },
         )
     }
 }
